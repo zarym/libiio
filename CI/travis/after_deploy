@@ -1,0 +1,33 @@
+#!/bin/sh -xe
+
+. CI/travis/lib.sh
+
+[ -z "${COVERITY_SCAN_PROJECT_NAME}"] || exit 0
+
+# These Travis-CI vars have to be non-empty
+[ -n "$TRAVIS_PULL_REQUEST" ] || exit 0
+[ -n "$TRAVIS_BRANCH" ] || exit 0
+set +x
+[ -n "$TRAVIS_API_TOKEN" ] || exit 0
+set -x
+
+# Has to be a non-pull-request
+[ "$TRAVIS_PULL_REQUEST" = "false" ] || exit 0
+
+pipeline_branch "$TRAVIS_BRANCH" || exit 0
+
+if [ -f CI/travis/jobs_running_cnt.py ] ; then
+	PYTHON_SCRIPT=CI/travis/jobs_running_cnt.py
+elif [ -f build/jobs_running_cnt.py ] ; then
+	PYTHON_SCRIPT=build/jobs_running_cnt.py
+else
+	echo "Could not find 'jobs_running_cnt.py'"
+	exit 1
+fi
+
+jobs_cnt=$(python $PYTHON_SCRIPT)
+
+# Trigger next job if we are the last job running
+[ "$jobs_cnt" = "1" ] || exit 0
+
+trigger_adi_build "libad9361-iio" "$TRAVIS_BRANCH"

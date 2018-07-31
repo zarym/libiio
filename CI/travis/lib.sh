@@ -1,5 +1,64 @@
 #!/bin/sh -xe
 
+export TRAVIS_API_URL="https://api.travis-ci.org"
+
+pipeline_branch() {
+	local branch=$1
+
+	[ -n "$branch" ] || return 1
+
+	# master is a always a pipeline branch
+	[ "$branch" = "master" ] && return 0
+
+	# Turn off tracing for a while ; log can fill up here
+	set +x
+	# Check if branch name is 20XX_RY where:
+	#   XX - 14 to 99 /* wooh, that's a lot of years */
+	#   Y  - 1 to 9   /* wooh, that's a lot of releases per year */
+	for year in $(seq 2014 2099) ; do
+		for rel_num in $(seq 1 9) ; do
+			[ "$branch" = "${year}_R${rel_num}" ] && \
+				return 0
+		done
+	done
+	set -x
+
+	return 1
+}
+
+trigger_build() {
+	local repo_slug="$1"
+	local branch="$2"
+
+	[ -n "$repo_slug" ] || return 1
+	[ -n "$branch" ] || return 1
+
+	local body="{
+		\"request\": {
+			\"branch\":\"$branch\"
+		}
+	}"
+
+	# Turn off tracing here (shortly)
+	set +x
+	curl -s -X POST \
+		-H "Content-Type: application/json" \
+		-H "Accept: application/json" \
+		-H "Travis-API-Version: 3" \
+		-H "Authorization: token $TRAVIS_API_TOKEN" \
+		-d "$body" \
+		https://api.travis-ci.org/repo/$repo_slug/requests
+	set -x
+}
+
+trigger_adi_build() {
+	local adi_repo="$1"
+	local branch="$2"
+
+	[ -n "$adi_repo" ] || return 1
+	trigger_build "analogdevicesinc%2F$adi_repo" "$branch"
+}
+
 get_ldist() {
 	case "$(uname)" in
 	Linux*)
